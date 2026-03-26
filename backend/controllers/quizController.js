@@ -19,6 +19,9 @@ const getQuizzes = async (req, res) => {
 // @access  Private
 const getQuizById = async (req, res) => {
     try {
+        if (req.params.id === 'stats') {
+            return getUserStats(req, res);
+        }
         const quiz = await Quiz.findById(req.params.id).populate('questions');
         if (quiz) {
             res.json(quiz);
@@ -181,13 +184,19 @@ const generateQuiz = async (req, res) => {
 
         if (subsection && testNumber) {
             // Strict Fixed Series Evaluation
-            questions = await Question.find({ subsection, testNumber }).select('_id');
+            // We use subject if provided to differentiate between subjects with same subsection name
+            const query = { subsection, testNumber };
+            if (subject && subject !== 'All') query.subject = subject;
+            
+            questions = await Question.find(query).select('_id');
             
             if (questions.length < 30) {
-                 return res.status(400).json({ message: `Insufficient Evaluation Criteria! Exactly 30 unique questions natively required per specific Subject Test. Server mapped only ${questions.length}.` });
+                 return res.status(400).json({ 
+                     message: `Insufficient Evaluation Criteria! Exactly 30 unique questions natively required per specific Subject Test. Server mapped only ${questions.length} for ${subject || ''} -> ${subsection} (Test ${testNumber}).` 
+                 });
             }
             
-            quizTitle = `${subsection} - Test ${testNumber} (30 Unique Questions)`;
+            quizTitle = `${subject ? subject + ' - ' : ''}${subsection} - Test ${testNumber} (30 Unique Questions)`;
         } else {
             // Generative Mixed Randomizations (for AI Tools & Legacy hooks)
             const matchStage = {};
@@ -218,4 +227,125 @@ const generateQuiz = async (req, res) => {
     }
 };
 
-module.exports = { getQuizzes, getQuizById, submitQuizAttempt, getDashboardStats, generateQuiz };
+const generateWeakTopicQuiz = async (req, res) => {
+    try {
+        const userId = req.user._id;
+        
+        // 1. Identify Weak Subjects (Accuracy < 50%)
+        const attempts = await QuizAttempt.find({ user: userId })
+            .populate('quiz', 'section')
+            .select('score quiz');
+
+        const subjectMap = {};
+        attempts.forEach(a => {
+            const subject = a.quiz?.section || 'इतर';
+            if (!subjectMap[subject]) subjectMap[subject] = { total: 0, sum: 0 };
+            subjectMap[subject].total++;
+            subjectMap[subject].sum += a.score;
+        });
+
+        const weakSubjects = Object.entries(subjectMap)
+            .filter(([name, s]) => (s.sum / s.total) < 50)
+            .map(([name, s]) => name);
+
+        if (weakSubjects.length === 0) {
+            return res.status(404).json({ message: 'No weak subjects identified yet! Try taking more tests.' });
+        }
+
+        // 2. Fetch 15 random questions from these subjects
+        const questions = await Question.aggregate([
+            { $match: { section: { $in: weakSubjects } } },
+            { $sample: { size: 15 } }
+        ]);
+
+        if (questions.length === 0) {
+            return res.status(404).json({ message: 'No questions found for your weak subjects.' });
+        }
+
+        // 3. Create a temporary quiz
+        const quiz = await Quiz.create({
+            title: "कमकुवत विषय सराव चाचणी",
+            questions: questions.map(q => q._id),
+            isWeakPractice: true
+        });
+
+        res.status(201).json(quiz);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Get user detailed stats (Summary + Charts)
+// @route   GET /api/quizzes/stats
+// @access  Private
+const getUserStats = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // Populate quiz.section for subject-wise breakdown
+    const attempts = await QuizAttempt
+      .find({ user: userId })
+      .sort({ createdAt: 1 })
+      .populate('quiz', 'section')
+      .select('score answers createdAt quiz');
+
+    /* ── Summary stats ─────────────────────────────────────────────────────── */
+    const totalTests = attempts.length;
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const todayTests = attempts.filter(a => new Date(a.createdAt) >= todayStart).length;
+    const scores = attempts.map(a => a.score);
+    const bestScore    = scores.length ? Math.max(...scores) : 0;
+    const averageScore = scores.length
+      ? Math.round(scores.reduce((s, v) => s + v, 0) / scores.length) : 0;
+
+    /* ── Line chart: score progress over time ───────────────────────────────── */
+    const progressData = attempts.slice(-20).map((a, i) => ({
+      name: `#${i + 1}`,
+      date: new Date(a.createdAt).toLocaleDateString('mr-IN', { month: 'short', day: 'numeric' }),
+      score: a.score,
+    }));
+
+    /* ── Bar chart: subject-wise average score ──────────────────────────────── */
+    const subjectMap = {};
+    attempts.forEach(a => {
+      const subject = a.quiz?.section || 'इतर';
+      if (!subjectMap[subject]) subjectMap[subject] = { total: 0, sum: 0 };
+      subjectMap[subject].total++;
+      subjectMap[subject].sum += a.score;
+    });
+    const subjectData = Object.entries(subjectMap).map(([name, s]) => ({
+      name,
+      score: Math.round(s.sum / s.total),
+    }));
+
+    /* ── Pie chart: correct / wrong / skipped across all attempts ───────────── */
+    let correct = 0, wrong = 0, skipped = 0;
+    attempts.forEach(a => {
+      (a.answers || []).forEach(ans => {
+        if (!ans.selectedOption) skipped++;
+        else if (ans.isCorrect)  correct++;
+        else                     wrong++;
+      });
+    });
+    // Fallback when no answer details exist yet
+    if (correct + wrong + skipped === 0 && scores.length) {
+      correct = bestScore; wrong = 100 - bestScore; skipped = 0;
+    }
+    const pieData = [
+      { name: 'बरोबर',    value: correct,  fill: '#22c55e' },
+      { name: 'चुकीचे',   value: wrong,    fill: '#ef4444' },
+      { name: 'सोडलेले',  value: skipped,  fill: '#6b7280' },
+    ];
+
+    /* ── Weak topics: accuracy < 50% ────────────────────────────────────────── */
+    const weakTopics = subjectData.filter(s => s.score < 50).map(s => s.name);
+
+    res.json({ totalTests, todayTests, bestScore, averageScore,
+               progressData, subjectData, pieData, weakTopics });
+  } catch (err) {
+    console.error('getUserStats error:', err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+module.exports = { getQuizzes, getQuizById, submitQuizAttempt, getDashboardStats, generateQuiz, generateWeakTopicQuiz, getUserStats };

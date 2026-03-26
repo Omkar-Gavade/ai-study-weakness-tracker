@@ -56,6 +56,10 @@ const questionSchema = mongoose.Schema(
             type: String,
             required: true,
             unique: true
+        },
+        explanation: {
+            type: String,
+            required: false
         }
     },
     {

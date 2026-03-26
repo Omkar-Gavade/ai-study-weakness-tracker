@@ -1,0 +1,15 @@
+﻿[dotenv@17.3.1] injecting env (0) from backend\.env -- tip: ⚙️  suppress all logs with { quiet: true }
+Connected to MongoDB for Verification...
+
+Subject: अर्थव्यवस्था
+- Topic: भारतीय अर्थव्यवस्था, Test: 1 => Total: 30 (Easy: 10, Med: 10, Hard: 10)
+- Topic: भारतीय अर्थव्यवस्था, Test: 2 => Total: 30 (Easy: 10, Med: 10, Hard: 10)
+- Topic: बँकिंग व महागाई, Test: 1 => Total: 30 (Easy: 10, Med: 10, Hard: 10)
+- Topic: बँकिंग व महागाई, Test: 2 => Total: 30 (Easy: 10, Med: 10, Hard: 10)
+- Topic: लोकसंख्या व दारिद्र्य, Test: 1 => Total: 30 (Easy: 10, Med: 10, Hard: 10)
+- Topic: लोकसंख्या व दारिद्र्य, Test: 2 => Total: 30 (Easy: 10, Med: 10, Hard: 10)
+- Topic: सार्वजनिक वित्त व योजना, Test: 1 => Total: 30 (Easy: 10, Med: 10, Hard: 10)
+- Topic: सार्वजनिक वित्त व योजना, Test: 2 => Total: 30 (Easy: 10, Med: 10, Hard: 10)
+
+Total Economics Questions in DB: 240
+✅ Verification Successful: All 240 questions are present.

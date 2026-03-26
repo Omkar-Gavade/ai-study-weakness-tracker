@@ -10,6 +10,7 @@ import QuizAttemptPage from './pages/QuizAttemptPage';
 import QuizSection from './pages/QuizSection';
 import QuizSubsection from './pages/QuizSubsection';
 import QuizStartPage from './pages/QuizStartPage';
+import WeakTopicPractice from './pages/WeakTopicPractice';
 import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
@@ -74,6 +75,7 @@ function App() {
               <Route path="/quizzes/:examId/:groupId/:subjectId/:topicId" element={user ? <QuizList /> : <Navigate to="/login" />} />
               {/* ── Direct quiz start (no redirect) ── */}
               <Route path="/quiz/start/:testId" element={user ? <QuizStartPage /> : <Navigate to="/login" />} />
+              <Route path="/quiz/practice/weak" element={user ? <WeakTopicPractice /> : <Navigate to="/login" />} />
               {/* ── Actual quiz attempt (existing) ── */}
               <Route path="/quizzes/section/:sectionId" element={user ? <QuizSection /> : <Navigate to="/login" />} />
               <Route path="/quizzes/section/:sectionId/:subsection" element={user ? <QuizSubsection /> : <Navigate to="/login" />} />
