@@ -9,7 +9,11 @@ connectDB();
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+    origin: "*",
+    credentials: true
+}));
+
 app.use(express.json());
 
 app.use('/api/auth', require('./routes/authRoutes'));
@@ -24,6 +28,13 @@ app.get('/', (req, res) => {
     res.send('API is running...');
 });
 
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
+
+process.on('unhandledRejection', (err) => {
+    console.error(`Unhandled Error: ${err.message}`);
+    process.exit(1);
+});
