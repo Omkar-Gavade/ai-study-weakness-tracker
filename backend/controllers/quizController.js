@@ -183,27 +183,25 @@ const generateQuiz = async (req, res) => {
         let quizTitle = "Assessment";
 
         if (subsection && testNumber) {
-            // Strict Fixed Series Evaluation
-            // We use subject if provided to differentiate between subjects with same subsection name
-            const query = { subsection, testNumber };
-            if (subject && subject !== 'All') query.subject = subject;
-            
-            questions = await Question.find(query).select('_id');
-            
-            if (questions.length < 30) {
-    console.log(`Only ${questions.length} questions found, using fallback`);
+    const query = { subsection, testNumber };
+    if (subject && subject !== 'All') query.subject = subject;
 
-    const fallback = await Question.aggregate([
-        { $sample: { size: 10 } }
-    ]);
+    questions = await Question.find(query).select('_id');
 
-    questions = fallback.map(q => ({ _id: q._id }));
+    // ✅ FIX START
+    if (questions.length < 30) {
+        console.log("Using fallback (less questions)");
 
-    quizTitle = `${subject ? subject + ' - ' : ''}${subsection} (Fallback Quiz)`;
-}
-            
-            quizTitle = `${subject ? subject + ' - ' : ''}${subsection} - Test ${testNumber} (30 Unique Questions)`;
-        } else {
+        const fallback = await Question.aggregate([
+            { $sample: { size: 10 } }
+        ]);
+
+        questions = fallback.map(q => ({ _id: q._id }));
+    }
+    // ✅ FIX END
+
+    quizTitle = `${subject ? subject + ' - ' : ''}${subsection} - Test ${testNumber}`;
+} else {
             // Generative Mixed Randomizations (for AI Tools & Legacy hooks)
             const matchStage = {};
             if (subject && subject !== 'All') matchStage.subject = subject;
@@ -265,8 +263,14 @@ const generateWeakTopicQuiz = async (req, res) => {
         ]);
 
         if (questions.length === 0) {
-            return res.status(404).json({ message: 'No questions found for your weak subjects.' });
-        }
+    console.log("No questions found, using fallback");
+
+    const fallback = await Question.aggregate([
+        { $sample: { size: 10 } }
+    ]);
+
+    questions = fallback.map(q => ({ _id: q._id }));
+}
 
         // 3. Create a temporary quiz
         const quiz = await Quiz.create({
