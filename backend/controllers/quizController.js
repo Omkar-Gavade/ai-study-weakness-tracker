@@ -191,10 +191,16 @@ const generateQuiz = async (req, res) => {
             questions = await Question.find(query).select('_id');
             
             if (questions.length < 30) {
-                 return res.status(400).json({ 
-                     message: `Insufficient Evaluation Criteria! Exactly 30 unique questions natively required per specific Subject Test. Server mapped only ${questions.length} for ${subject || ''} -> ${subsection} (Test ${testNumber}).` 
-                 });
-            }
+    console.log(`Only ${questions.length} questions found, using fallback`);
+
+    const fallback = await Question.aggregate([
+        { $sample: { size: 10 } }
+    ]);
+
+    questions = fallback.map(q => ({ _id: q._id }));
+
+    quizTitle = `${subject ? subject + ' - ' : ''}${subsection} (Fallback Quiz)`;
+}
             
             quizTitle = `${subject ? subject + ' - ' : ''}${subsection} - Test ${testNumber} (30 Unique Questions)`;
         } else {
